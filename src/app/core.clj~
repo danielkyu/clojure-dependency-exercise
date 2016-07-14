@@ -1,0 +1,76 @@
+(ns app.core
+  (:gen-class)
+  (:require [clojure.set :as set]))
+
+(defn -main
+  "I don't do a whole lot ... yet."
+  [& args]
+  (println "Hello, World!"))
+
+(def data
+  [{:name "sourceA"
+    :dependencies #{"sourceB" "sourceC", "sourceD"}
+    :data_source (fn[] (println "Fetching data for SourceA"))}
+   
+   {:name "sourceB"
+    :dependencies #{"sourceE" "sourceF"}
+    :data_source (fn[] (println "Fetching data for SourceB"))}
+   
+   {:name "sourceC"
+    :dependencies #{"sourceD" "sourceF"}
+    :data_source (fn[] (println "Fetching data for SourceC"))}
+   
+   {:name "sourceD"
+    :dependencies #{}
+    :data_source (fn[] (println "Fetching data for SourceD"))}
+   
+   {:name "sourceE"
+    :dependencies #{}
+    :data_source (fn[] (println "Fetching data for SourceE"))}
+   
+   {:name "sourceF"
+    :dependencies #{}
+    :data_source (fn[] (println "Fetching data for SourceF"))}])
+
+;; EDGE CASE: cannot load any more
+
+(defn is-dependencies-loaded?
+  "Given a set of source names that have already been loaded and a source to perform
+   dependency checking, returns true if all the dependencies of the source have been loaded;
+   false otherwise."
+  [loaded source]
+  (-> source
+      (:dependencies)
+      (set/subset? loaded)))
+
+(defn find-loadable-sources
+  "Given a list of sources and a set of source names that have already been loaded, returns
+   a collection of sources that are able to be loaded."
+  [sources loaded]
+  (filter (partial is-dependencies-loaded? loaded) sources))
+
+(defn load-new-sources
+  "Given a list of sources and a set of source names that have already been loaded, loads the
+   source by invoking the function associated with `:data_source` and returns a Clojure map
+   with the following keys:
+     * :sources - The updated list of sources that have not yet been loaded.
+     * :loaded - The updated list of sources that have been loaded."
+  [sources loaded]
+  (let [loadable (find-loadable-sources sources (set loaded))]
+    (doseq [source loadable]
+      ((:data_source source)))
+    {:sources (let [loadable (set loadable)]
+                (remove #(loadable %) sources))
+     :loaded (->> loadable (map :name) (concat loaded))}))
+
+(defn load-sources!
+  "Given a list of sources to load and an optional list of already loaded sources, loads the
+   sources by executing the function associated with the `:data_source` key and returns a
+   collection of source names in the order in which they were loaded."
+  ([sources]
+   (load-sources sources []))
+  ([sources loaded]
+   (let [{:keys [loaded sources]} (load-new-sources sources loaded)]
+     (if (seq sources)
+       (load-sources sources loaded)
+       loaded))))
